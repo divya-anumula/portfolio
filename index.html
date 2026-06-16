@@ -252,7 +252,7 @@ footer{background:rgba(2,4,8,0.85);backdrop-filter:blur(20px);border-top:1px sol
 <!-- ═══════════════════════════════════════
      FIXED VIDEO BACKGROUND — entire page
      ═══════════════════════════════════════ -->
-<video id="bg-video" muted playsinline preload="auto" webkit-playsinline>
+<video id="bg-video" muted autoplay playsinline preload="auto" webkit-playsinline loop>
   <source src="hero-video.mp4" type="video/mp4"/>
 </video>
 <div id="video-overlay"></div>
@@ -663,23 +663,9 @@ const isIOS     = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 const isAndroid = /Android/i.test(navigator.userAgent);
 const isMobile  = isIOS || isAndroid;
 
-// ── Desktop: pause and scrub ──
-if (!isMobile) {
-  video.pause();
-  video.currentTime = 0;
-}
-
-// ── Mobile: just autoplay silently ──
-if (isMobile) {
-  video.muted = true;
-  video.setAttribute('playsinline', '');
-  video.setAttribute('webkit-playsinline', '');
-  video.loop = true;
-  video.play().catch(() => {});
-}
-
 // ── Desktop smooth scrub ──
 let target = 0, current = 0, rafId = null;
+
 function smoothScrub() {
   const d = target - current;
   if (Math.abs(d) > 0.001) {
@@ -692,31 +678,47 @@ function smoothScrub() {
   }
 }
 
+// ── Init after metadata loads ──
+function initVideo() {
+  if (isMobile) {
+    // Mobile: keep autoplaying as looping background
+    video.loop = true;
+    video.play().catch(() => {});
+  } else {
+    // Desktop: stop autoplay, sit at frame 0, scrub with scroll
+    video.pause();
+    video.loop = false;
+    video.currentTime = 0;
+  }
+}
+
+video.addEventListener('loadedmetadata', initVideo);
+if (video.readyState >= 1) initVideo(); // already loaded
+
+// ── iOS: unlock on first touch ──
+if (isIOS) {
+  document.addEventListener('touchstart', () => {
+    video.play().catch(() => {});
+  }, { once: true });
+}
+
+// ── Scroll handler ──
 window.addEventListener('scroll', () => {
   const scrollTop = window.scrollY;
-  const maxScroll = document.body.scrollHeight - window.innerHeight;
-  const fraction = Math.max(0, Math.min(1, scrollTop / maxScroll));
-  const duration = video.duration || 10;
+  const maxScroll  = document.body.scrollHeight - window.innerHeight;
+  const fraction   = Math.max(0, Math.min(1, scrollTop / maxScroll));
 
   progressBar.style.width = (fraction * 100) + '%';
   document.getElementById('navbar').style.background =
     scrollTop > 60 ? 'rgba(2,4,8,0.92)' : 'rgba(2,4,8,0.55)';
 
-  // Desktop only: scrub video to scroll position
+  // Desktop only: scrub to scroll position
   if (!isMobile) {
-    target = fraction * duration;
+    target = fraction * (video.duration || 10);
     if (rafId) cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(smoothScrub);
   }
 }, { passive: true });
-
-// ── iOS: unlock autoplay on first touch ──
-if (isIOS) {
-  document.addEventListener('touchstart', function unlock() {
-    video.play().catch(() => {});
-    document.removeEventListener('touchstart', unlock);
-  }, { once: true });
-}
 
 // ── SCROLL REVEAL ──
 const observer = new IntersectionObserver(entries => {
