@@ -252,7 +252,7 @@ footer{background:rgba(2,4,8,0.85);backdrop-filter:blur(20px);border-top:1px sol
 <!-- ═══════════════════════════════════════
      FIXED VIDEO BACKGROUND — entire page
      ═══════════════════════════════════════ -->
-<video id="bg-video" muted autoplay playsinline preload="auto" webkit-playsinline loop>
+<video id="bg-video" muted playsinline preload="auto" webkit-playsinline>
   <source src="hero-video.mp4" type="video/mp4"/>
 </video>
 <div id="video-overlay"></div>
@@ -656,14 +656,12 @@ document.querySelectorAll('button,a').forEach(el=>{
 });
 
 // ── VIDEO SCROLL SYNC ──
-const video = document.getElementById('bg-video');
+const video       = document.getElementById('bg-video');
 const progressBar = document.getElementById('video-progress');
+const isIOS       = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+const isAndroid   = /Android/i.test(navigator.userAgent);
+const isMobile    = isIOS || isAndroid;
 
-const isIOS     = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-const isAndroid = /Android/i.test(navigator.userAgent);
-const isMobile  = isIOS || isAndroid;
-
-// ── Desktop smooth scrub ──
 let target = 0, current = 0, rafId = null;
 
 function smoothScrub() {
@@ -678,43 +676,35 @@ function smoothScrub() {
   }
 }
 
-// ── Init after metadata loads ──
-function initVideo() {
+// Wait until video can play before doing anything
+video.addEventListener('canplay', () => {
   if (isMobile) {
-    // Mobile: keep autoplaying as looping background
     video.loop = true;
     video.play().catch(() => {});
   } else {
-    // Desktop: stop autoplay, sit at frame 0, scrub with scroll
     video.pause();
-    video.loop = false;
     video.currentTime = 0;
   }
-}
+}, { once: true });
 
-video.addEventListener('loadedmetadata', initVideo);
-if (video.readyState >= 1) initVideo(); // already loaded
-
-// ── iOS: unlock on first touch ──
+// iOS needs a user gesture to unlock
 if (isIOS) {
   document.addEventListener('touchstart', () => {
     video.play().catch(() => {});
   }, { once: true });
 }
 
-// ── Scroll handler ──
 window.addEventListener('scroll', () => {
-  const scrollTop = window.scrollY;
-  const maxScroll  = document.body.scrollHeight - window.innerHeight;
-  const fraction   = Math.max(0, Math.min(1, scrollTop / maxScroll));
+  const st  = window.scrollY;
+  const max = document.body.scrollHeight - window.innerHeight;
+  const f   = Math.max(0, Math.min(1, st / max));
 
-  progressBar.style.width = (fraction * 100) + '%';
+  progressBar.style.width = (f * 100) + '%';
   document.getElementById('navbar').style.background =
-    scrollTop > 60 ? 'rgba(2,4,8,0.92)' : 'rgba(2,4,8,0.55)';
+    st > 60 ? 'rgba(2,4,8,0.92)' : 'rgba(2,4,8,0.55)';
 
-  // Desktop only: scrub to scroll position
   if (!isMobile) {
-    target = fraction * (video.duration || 10);
+    target = f * (video.duration || 10);
     if (rafId) cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(smoothScrub);
   }
